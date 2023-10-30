@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Hello, Pico.css</title>
+    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css" />
+    <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
+    <style>
+        .multi-layout {
+            column-count: 3;
+        }
+    </style>
+    <py-env>
+        - pandas
+    </py-env>
+</head>
+
+<body>
+    <py-script>
+        import pandas as pd
+        import json
+        from datetime import date, timedelta
+        from pyodide.http import open_url
+        from js import document
+
+        http_res = open_url("http://163.180.142.196:9090/today_api/dna")
+        dna = json.loads(http_res.read())
+
+        db = {} # key : department name, value : depart code 
+        for k, v in dna.items():
+            dept_name = str(v[0])
+            dept_code = str(k)
+            if dept_code[1] == '0' or dept_code[1] == 'S':
+                db[dept_name] = dept_code
+        
+        db_sorted_keys = list(db) 
+        db_sorted_keys.sort()
+
+        do_action_date_delta = 0
+
+        def do_action(target_date):
+
+            global db 
+            global db_sorted_keys 
+
+            http_res = open_url("http://163.180.142.196:9090/today_api/" + target_date)
+            stack = json.loads(http_res.read())
+            stack = stack["STACKS"]
+
+            if target_date == 'today':
+                pyscript.write("output_date", "오늘의 게시물")
+            else:
+                date_list = target_date.split("-")
+                date_output = date_list[0] + "년 " + date_list[1] + "월 " + date_list[2] + "일의 게시물"
+                pyscript.write("output_date", date_output)
+            
+
+            if len(stack) > 0:
+
+                posts = {} # key : dept code, value : posts 
+                for i in stack:
+                    if i[0] not in posts:
+                        posts[i[0]] = []
+                    posts[i[0]].append(i[2:])
+                    
+                merged_db = {} # key : department name, value : posts
+                for dept_name in db_sorted_keys:
+                    dept_code = db[dept_name] 
+                    if dept_code in posts:
+                        merged_db[dept_name] = posts[dept_code]
+
+                container = document.getElementById('display_status')
+
+                for k, v in merged_db.items():
+                    new_element = document.createElement('article')
+                    new_element.id = 'article_' + str(db[k])
+                    container.appendChild(new_element)
+
+                for k, v in merged_db.items():
+                    new_element = document.createElement('h6')
+                    new_element.textContent = str(k).replace('.', ' ')
+
+                    article = document.getElementById('article_' + str(db[k]))
+                    article.appendChild(new_element)
+
+                    for post in v:
+                        new_element = document.createElement('a')
+                        new_element.textContent = post[0]
+                        new_element.href = post[1]
+                        article.appendChild(new_element)
+                        new_element = document.createElement('br')
+                        article.appendChild(new_element)
+                
+            else:
+
+                container = document.getElementById('display_status')
+                new_element = document.createElement('h4')
+                new_element.align = "center"
+                new_element.textContent = "공지사항이 없습니다"
+                container.appendChild(new_element)
+
+        def on_button_to_past(*args):
+            global do_action_date
+            global do_action_date_delta
+
+            container = document.getElementById('display_status')
+            container.replaceChildren()
+
+            do_action_date_delta = do_action_date_delta + 1
+            do_action_date = date.today() - timedelta(do_action_date_delta) 
+
+            do_action(do_action_date.strftime("%Y-%m-%d"))
+
+        def on_button_today(*args):
+            global do_action_date
+            global do_action_date_delta
+
+            container = document.getElementById('display_status')
+            container.replaceChildren()
+
+            do_action_date_delta = 0
+            do_action('today')
+
+        def on_button_to_future(*args):
+            global do_action_date
+            global do_action_date_delta
+
+            container = document.getElementById('display_status')
+            container.replaceChildren()
+
+            if do_action_date_delta > 1:
+                do_action_date_delta = do_action_date_delta - 1
+                do_action_date = date.today() - timedelta(do_action_date_delta) 
+                do_action(do_action_date.strftime("%Y-%m-%d"))
+            else:
+                do_action_date_delta = 0
+                do_action('today')        
+
+        # main function
+        do_action('today')
+
+    </py-script>
+    
+    <main class="container">
+        <section id="header">
+            <h2 id="output_date" align="center">경희의 오늘을 준비중 입니다</h3>
+        </section>
+        <div class="multi-layout">            
+            <button id="submit_1" pys-onClick="on_button_to_past">과거로</button>
+            <button id="submit_2" pys-onClick="on_button_today">오늘</button>
+            <button id="submit_3" pys-onClick="on_button_to_future">오늘로</button>
+        </div>
+        <section id="result">
+            <div id="display_status"></div>
+        </section>
+    </main>
+</body>
+
+</html>
