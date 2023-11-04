@@ -1,161 +1,298 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
-
 <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Hello, Pico.css</title>
-    <link rel="stylesheet" href="https://unpkg.com/@picocss/pico@latest/css/pico.min.css" />
-    <script defer src="https://pyscript.net/alpha/pyscript.js"></script>
-    <style>
-        .multi-layout {
-            column-count: 3;
-        }
-    </style>
-    <py-env>
-        - pandas
-    </py-env>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="A layout example that shows off a blog page with a list of posts.">
+    <title>Blog &ndash; Layout Examples &ndash; Pure</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/pure-min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/purecss@3.0.0/build/grids-responsive-min.css">
+    <link rel="stylesheet" href="styles.css">
+    <script defer src="https://pyscript.net/latest/pyscript.js"></script>
+    <py-config>
+        packages = ["pandas"]
+    </py-config>
 </head>
-
 <body>
-    <py-script>
-        import pandas as pd
-        import json
-        from datetime import date, timedelta
-        from pyodide.http import open_url
-        from js import document
 
-        http_res = open_url("http://163.180.142.196:9090/today_api/dna")
-        dna = json.loads(http_res.read())
+<div id="layout" class="pure-g">
+    <div class="sidebar pure-u-1 pure-u-md-1-4">
+        <!-- A wrapper for the Side bar -->
+        <div class="header">
+            <h1 class="brand-title">경희의 오늘</h1>
+            <p></p>
+            <h2 class="brand-tagline" id="output_date"></h2>
+            <p></p>
+            <nav class="nav">
+                <ul class="nav-list">
+                    <li class="nav-item">
+                        <a class="pure-button" id="submit_1"><<</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="pure-button" id="submit_2">오늘</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="pure-button" id="submit_3">>></a>
+                    </li>  
+                </ul>
+            </nav>   
+        </div>
+    </div>
 
-        db = {} # key : department name, value : depart code 
-        for k, v in dna.items():
-            dept_name = str(v[0])
-            dept_code = str(k)
-            if dept_code[1] == '0' or dept_code[1] == 'S':
-                db[dept_name] = dept_code
-        
-        db_sorted_keys = list(db) 
-        db_sorted_keys.sort()
+    <div class="content pure-u-1 pure-u-md-3-4">
+        <div>
+            <!-- A wrapper for the Pinned posts -->
+            <div class="posts">
+                <div id="display_pinned_posts">
+                </div>
+            </div>
+
+            <!-- A wrapper for the Recent posts -->
+            <div class="posts">
+                <h1 class="content-subhead">Recent Posts</h1>
+                <div id="display_recent_posts">
+                    <section class="post">
+                        <header class="post-header">
+                            <h2 class="post-title">경희의 오늘을 시작하고 있습니다......</h2>
+                        </header>
+    
+                        <div class="post-description">
+                            <p> 잠시만 기다려 주십시오...... </p>
+                        </div>
+                    </section>
+                </div>
+            </div>
+
+            <!-- A wrapper for footer -->
+            <div class="footer">
+                <div class="pure-menu pure-menu-horizontal">
+                    <ul>
+                        <li class="pure-menu-item"><a href="http://mobilelab.khu.ac.kr/wordpress/about/" class="pure-menu-link" target="_blank">About</a></li>
+                        <li class="pure-menu-item"><a href="https://github.com/drsungwon/khu-today-app-PyScript/" class="pure-menu-link" target="_blank">GitHub</a></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<py-script>
+
+    import pandas as pd
+    import json
+    from datetime import date, timedelta
+    from pyodide.http import open_url
+    from pyodide.ffi.wrappers import add_event_listener
+    from js import document
+
+    # preprocessing department code and name
+
+    http_res = open_url("http://163.180.142.196:9090/today_api/dna")
+    dna = json.loads(http_res.read())
+
+    db = {} # key : department name, value : depart code 
+    for k, v in dna.items():
+        dept_name = str(v[0])
+        dept_code = str(k)
+        if dept_code[1] == '0' or dept_code[1] == 'S':
+            db[dept_name] = dept_code
+    
+    db_sorted_keys = list(db) 
+    db_sorted_keys.sort()
+
+    do_action_date_delta = 0
+
+    # actions for date change
+
+    def on_button_to_past(*args):
+        global do_action_date_delta
+
+        do_action_date_delta = do_action_date_delta + 1
+        do_action_date = date.today() - timedelta(do_action_date_delta) 
+        do_action(do_action_date.strftime("%Y-%m-%d"))
+
+    def on_button_today(*args):
+        global do_action_date_delta
 
         do_action_date_delta = 0
-
-        def do_action(target_date):
-
-            global db 
-            global db_sorted_keys 
-
-            http_res = open_url("http://163.180.142.196:9090/today_api/" + target_date)
-            stack = json.loads(http_res.read())
-            stack = stack["STACKS"]
-
-            if target_date == 'today':
-                pyscript.write("output_date", "오늘의 게시물")
-            else:
-                date_list = target_date.split("-")
-                date_output = date_list[0] + "년 " + date_list[1] + "월 " + date_list[2] + "일의 게시물"
-                pyscript.write("output_date", date_output)
-            
-
-            if len(stack) > 0:
-
-                posts = {} # key : dept code, value : posts 
-                for i in stack:
-                    if i[0] not in posts:
-                        posts[i[0]] = []
-                    posts[i[0]].append(i[2:])
-                    
-                merged_db = {} # key : department name, value : posts
-                for dept_name in db_sorted_keys:
-                    dept_code = db[dept_name] 
-                    if dept_code in posts:
-                        merged_db[dept_name] = posts[dept_code]
-
-                container = document.getElementById('display_status')
-
-                for k, v in merged_db.items():
-                    new_element = document.createElement('article')
-                    new_element.id = 'article_' + str(db[k])
-                    container.appendChild(new_element)
-
-                for k, v in merged_db.items():
-                    new_element = document.createElement('h6')
-                    new_element.textContent = str(k).replace('.', ' ')
-
-                    article = document.getElementById('article_' + str(db[k]))
-                    article.appendChild(new_element)
-
-                    for post in v:
-                        new_element = document.createElement('a')
-                        new_element.textContent = post[0]
-                        new_element.href = post[1]
-                        article.appendChild(new_element)
-                        new_element = document.createElement('br')
-                        article.appendChild(new_element)
-                
-            else:
-
-                container = document.getElementById('display_status')
-                new_element = document.createElement('h4')
-                new_element.align = "center"
-                new_element.textContent = "공지사항이 없습니다"
-                container.appendChild(new_element)
-
-        def on_button_to_past(*args):
-            global do_action_date
-            global do_action_date_delta
-
-            container = document.getElementById('display_status')
-            container.replaceChildren()
-
-            do_action_date_delta = do_action_date_delta + 1
-            do_action_date = date.today() - timedelta(do_action_date_delta) 
-
-            do_action(do_action_date.strftime("%Y-%m-%d"))
-
-        def on_button_today(*args):
-            global do_action_date
-            global do_action_date_delta
-
-            container = document.getElementById('display_status')
-            container.replaceChildren()
-
-            do_action_date_delta = 0
-            do_action('today')
-
-        def on_button_to_future(*args):
-            global do_action_date
-            global do_action_date_delta
-
-            container = document.getElementById('display_status')
-            container.replaceChildren()
-
-            if do_action_date_delta > 1:
-                do_action_date_delta = do_action_date_delta - 1
-                do_action_date = date.today() - timedelta(do_action_date_delta) 
-                do_action(do_action_date.strftime("%Y-%m-%d"))
-            else:
-                do_action_date_delta = 0
-                do_action('today')        
-
-        # main function
         do_action('today')
 
-    </py-script>
-    
-    <main class="container">
-        <section id="header">
-            <h2 id="output_date" align="center">경희의 오늘을 준비중 입니다</h3>
-        </section>
-        <div class="multi-layout">            
-            <button id="submit_1" pys-onClick="on_button_to_past">과거로</button>
-            <button id="submit_2" pys-onClick="on_button_today">오늘</button>
-            <button id="submit_3" pys-onClick="on_button_to_future">오늘로</button>
-        </div>
-        <section id="result">
-            <div id="display_status"></div>
-        </section>
-    </main>
-</body>
+    def on_button_to_future(*args):
+        global do_action_date_delta
 
+        if do_action_date_delta > 1:
+            do_action_date_delta = do_action_date_delta - 1
+            do_action_date = date.today() - timedelta(do_action_date_delta) 
+            do_action(do_action_date.strftime("%Y-%m-%d"))
+        else:
+            on_button_today()
+
+    add_event_listener(document.getElementById("submit_1"), "click", on_button_to_past)
+    add_event_listener(document.getElementById("submit_2"), "click", on_button_today)
+    add_event_listener(document.getElementById("submit_3"), "click", on_button_to_future)
+
+    # actions for data retrieval
+
+    def do_action(target_date):
+
+        global db 
+        global db_sorted_keys 
+
+        # step.1 retrieve data
+
+        http_res = open_url("http://163.180.142.196:9090/today_api/" + target_date)
+        stack = json.loads(http_res.read())
+        stack = stack["STACKS"]
+
+        # step.2 print date
+
+        if target_date == 'today':
+            pyscript.write("output_date", "오늘의 게시물") 
+        else:
+            date_list = target_date.split("-")
+            date_output = date_list[0] + "년 " + date_list[1] + "월 " + date_list[2] + "일"
+            pyscript.write("output_date", date_output) 
+
+        # step.3 process data
+
+        if len(stack) > 0:
+
+            posts = {} # key : dept code, value : posts 
+            for i in stack:
+                if i[0] not in posts:
+                    posts[i[0]] = []
+                posts[i[0]].append(i[2:])
+                
+            merged_db = {} # key : department name, value : posts
+            for dept_name in db_sorted_keys:
+                dept_code = db[dept_name] 
+                if dept_code in posts:
+                    merged_db[dept_name] = posts[dept_code]
+
+        # step.4 print recent posts (no data)
+
+        r_posts = document.getElementById('display_recent_posts')
+        r_posts.replaceChildren()
+
+        p_posts = document.getElementById('display_pinned_posts')
+        p_posts.replaceChildren()
+
+        if len(stack) == 0:
+
+            # create section
+
+            s = document.createElement('section')
+            s.setAttribute("class", "post")
+
+            # post title creation
+
+            h = document.createElement('header')
+            h.setAttribute("class", "post-header")
+
+            h_title = document.createElement('h2')
+            h_title.setAttribute("class", "post-title")
+            h_title.textContent = "공지사항이 없습니다"
+            
+            h.appendChild(h_title)       
+
+            # post description creation
+
+            div = document.createElement('div')
+            div.setAttribute("class", "post-description")
+
+            p = document.createElement('p')
+            p.textContent = "다른 날자를 선택해 주세요."
+            
+            div.appendChild(p)       
+
+            # attach title and description to section
+
+            s.appendChild(h)         
+            s.appendChild(div)    
+
+            # display section    
+
+            r_posts.appendChild(s) 
+
+        # step.5 print data
+
+        else:
+            pinned_dept = [
+                "소프트웨어융합대학",
+                "소프트웨어융합학과",
+                "소프트웨어융합학과.아고라",
+                "소프트웨어융합학과.취업정보",
+                "소프트웨어중심대학사업단"
+            ]
+
+            # create sections
+            
+            flag_pinned_posts = False
+
+            for k, v in merged_db.items():
+                s = document.createElement('section')
+                s.setAttribute("class", "post")
+                s.id = 'article_' + str(db[k])
+
+                if k in pinned_dept:
+                    if flag_pinned_posts == False:
+                        h_title = document.createElement('h1')
+                        h_title.setAttribute("class", "content-subhead")
+                        h_title.textContent = "Pinned Posts"
+                        p_posts.appendChild(h_title)   
+                        flag_pinned_posts = True
+                    else:
+                        pass
+                    
+                    p_posts.appendChild(s)
+                else:
+                    r_posts.appendChild(s)
+    
+
+            # fill sections
+
+            for k, v in merged_db.items():
+                s = document.getElementById('article_' + str(db[k]))
+
+                # post title creation
+
+                p_title = str(k).replace('.', ' ')
+
+                h = document.createElement('header')
+                h.setAttribute("class", "post-header")
+    
+                h_title = document.createElement('h2')
+                h_title.setAttribute("class", "post-title")
+                h_title.textContent = p_title
+            
+                h.appendChild(h_title)       
+    
+                # post description creation
+
+                div = document.createElement('div')
+                div.setAttribute("class", "post-description") 
+
+                for post in v:   
+                    a = document.createElement('a')
+                    a.textContent = post[0]
+                    a.href = post[1]
+                    a.target="_blank"
+                    div.appendChild(a)   
+
+                    br = document.createElement('br')
+                    div.appendChild(br)
+
+                # attach title and description to section
+
+                s.appendChild(h)         
+                s.appendChild(div)      
+
+    # main function
+
+    do_action('today')
+
+</py-script>
+
+</body>
 </html>
